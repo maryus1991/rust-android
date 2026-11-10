@@ -1,0 +1,274 @@
+name: Release
+
+# Four independent build jobs (Windows, Linux, Android, iOS) + one release job.
+# Triggers (see config/app.json -> release.mode):
+#   push to main       -> builds and publishes v<version> if that release does not exist yet
+#   push of tag v*     -> official release, the tag must equal v<version>
+#   manual (Actions)   -> optional publish / overwrite
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - "LICENSE"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish a GitHub Release (otherwise only keep workflow artifacts)
+        type: boolean
+        default: true
+      overwrite:
+        description: Replace the assets of an existing release with the same tag
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      name: ${{ steps.p.outputs.name }}
+      slug: ${{ steps.p.outputs.slug }}
+      version: ${{ steps.p.outputs.version }}
+      tag: ${{ steps.p.outputs.tag }}
+      prerelease: ${{ steps.p.outputs.prerelease }}
+      build: ${{ steps.p.outputs.build }}
+      publish: ${{ steps.p.outputs.publish }}
+      overwrite: ${{ steps.p.outputs.overwrite }}
+      windows: ${{ steps.p.outputs.windows }}
+      linux: ${{ steps.p.outputs.linux }}
+      android: ${{ steps.p.outputs.android }}
+      ios: ${{ steps.p.outputs.ios }}
+      windows_bundles: ${{ steps.p.outputs.windows_bundles }}
+      linux_bundles: ${{ steps.p.outputs.linux_bundles }}
+      android_abis: ${{ steps.p.outputs.android_abis }}
+      ios_method: ${{ steps.p.outputs.ios_method }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read configuration and plan the release
+        id: p
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_PUBLISH: ${{ inputs.publish }}
+          INPUT_OVERWRITE: ${{ inputs.overwrite }}
+        run: bash scripts/ci/prepare.sh
+
+  build-windows:
+    needs: prepare
+    if: needs.prepare.outputs.build == 'true' && needs.prepare.outputs.windows == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-rust-tauri
+        with:
+          cache-key: windows
+      - name: Sync configuration and icons
+        shell: bash
+        run: |
+          bash scripts/sync-config.sh
+          bash scripts/generate-icons.sh --require
+      - name: Build (MSI + NSIS)
+        shell: bash
+        env:
+          BUNDLES: ${{ needs.prepare.outputs.windows_bundles }}
+        run: tauri build --ci --bundles "$BUNDLES"
+      - name: Collect artifacts
+        shell: bash
+        env:
+          SLUG: ${{ needs.prepare.outputs.slug }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          BUNDLES: ${{ needs.prepare.outputs.windows_bundles }}
+        run: bash scripts/ci/collect.sh windows "$SLUG" "$VERSION" "$BUNDLES"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-windows
+          path: dist/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: status-windows
+          path: dist-status/*
+
+  build-linux:
+    needs: prepare
+    if: needs.prepare.outputs.build == 'true' && needs.prepare.outputs.linux == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf rpm fakeroot
+      - uses: ./.github/actions/setup-rust-tauri
+        with:
+          cache-key: linux
+      - name: Sync configuration and icons
+        run: |
+          bash scripts/sync-config.sh
+          bash scripts/generate-icons.sh --require
+      - name: Build (DEB + AppImage + RPM)
+        env:
+          BUNDLES: ${{ needs.prepare.outputs.linux_bundles }}
+          NO_STRIP: "true"
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+        run: tauri build --ci --bundles "$BUNDLES"
+      - name: Collect artifacts
+        env:
+          SLUG: ${{ needs.prepare.outputs.slug }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          BUNDLES: ${{ needs.prepare.outputs.linux_bundles }}
+        run: bash scripts/ci/collect.sh linux "$SLUG" "$VERSION" "$BUNDLES"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-linux
+          path: dist/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: status-linux
+          path: dist-status/*
+
+  build-android:
+    needs: prepare
+    if: needs.prepare.outputs.build == 'true' && needs.prepare.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: ./.github/actions/setup-rust-tauri
+        with:
+          targets: aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+          cache-key: android
+      - name: Android SDK / NDK
+        run: |
+          echo "NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+      - name: Sync configuration
+        run: bash scripts/sync-config.sh
+      - name: Generate the Android project (never edited by hand)
+        run: tauri android init --ci
+      - name: Generate icons (also writes the Android mipmaps)
+        run: bash scripts/generate-icons.sh --require
+      - name: Build APK + AAB
+        env:
+          ABIS: ${{ needs.prepare.outputs.android_abis }}
+        run: |
+          # shellcheck disable=SC2086
+          tauri android build --ci --apk --aab --target $ABIS
+      - name: Sign (APK via apksigner, AAB via jarsigner)
+        env:
+          SLUG: ${{ needs.prepare.outputs.slug }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: bash scripts/ci/android-sign.sh "$SLUG" "$VERSION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-android
+          path: dist/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: status-android
+          path: dist-status/*
+
+  build-ios:
+    needs: prepare
+    if: needs.prepare.outputs.build == 'true' && needs.prepare.outputs.ios == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-rust-tauri
+        with:
+          targets: aarch64-apple-ios
+          cache-key: ios
+      - name: Sync configuration
+        run: bash scripts/sync-config.sh
+      - name: Generate the iOS project (never edited by hand)
+        run: tauri ios init --ci
+      - name: Generate icons
+        run: bash scripts/generate-icons.sh --require
+      - name: Build (signed IPA when secrets exist, otherwise compile check)
+        env:
+          SLUG: ${{ needs.prepare.outputs.slug }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          METHOD: ${{ needs.prepare.outputs.ios_method }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_PROVISIONING_PROFILE: ${{ secrets.APPLE_PROVISIONING_PROFILE }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: bash scripts/ci/ios-build.sh "$SLUG" "$VERSION" "$METHOD"
+      - uses: actions/upload-artifact@v4
+        if: hashFiles('dist/*') != ''
+        with:
+          name: dist-ios
+          path: dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: status-ios
+          path: dist-status/*
+
+  release:
+    needs: [prepare, build-windows, build-linux, build-android, build-ios]
+    # Run only when publishing and no build failed or was cancelled (skipped = platform disabled).
+    if: >-
+      always() && needs.prepare.outputs.publish == 'true' && needs.prepare.outputs.build == 'true' &&
+      !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: release
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: status-*
+          path: dist-status
+          merge-multiple: true
+      - name: Create release notes and checksums
+        env:
+          NAME: ${{ needs.prepare.outputs.name }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: bash scripts/ci/release-notes.sh "$NAME" "$VERSION"
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          NAME: ${{ needs.prepare.outputs.name }}
+          OVERWRITE: ${{ needs.prepare.outputs.overwrite }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          [ -n "$(ls -A release)" ] || { echo "::error::nothing to publish"; exit 1; }
+          flags=()
+          [ "$PRERELEASE" = true ] && flags+=(--prerelease)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            [ "$OVERWRITE" = true ] || { echo "::error::release $TAG already exists"; exit 1; }
+            gh release upload "$TAG" release/* --clobber
+            gh release edit "$TAG" --notes-file release-notes.md --title "$NAME $TAG" "${flags[@]}"
+          else
+            gh release create "$TAG" release/* --target "$GITHUB_SHA" --title "$NAME $TAG" --notes-file release-notes.md "${flags[@]}"
+          fi
+          echo "### Published $TAG" >> "$GITHUB_STEP_SUMMARY"
+          gh release view "$TAG" --json url -q .url >> "$GITHUB_STEP_SUMMARY"

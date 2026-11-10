@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "windows": { "runner": "windows-latest", "bundles": ["msi", "nsis"] },
+  "linux": { "runner": "ubuntu-latest", "bundles": ["deb", "appimage", "rpm"] },
+  "android": { "runner": "ubuntu-latest", "abis": ["aarch64", "armv7"], "outputs": ["apk", "aab"], "javaVersion": "17" },
+  "ios": { "runner": "macos-latest", "exportMethod": "release-testing" }
+}

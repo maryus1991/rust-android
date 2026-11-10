@@ -1,0 +1,17 @@
+[package]
+name = "tauri-plugin-web2app-native"
+version = "0.1.0"
+authors = ["Web2App"]
+description = "Web2App native Android helpers (manifest permissions, downloads)"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT"
+links = "tauri-plugin-web2app-native"
+
+[dependencies]
+tauri = { version = "2" }
+serde = "1"
+thiserror = "2"
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }

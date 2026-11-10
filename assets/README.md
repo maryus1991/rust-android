@@ -1,0 +1,1 @@
+`icon/` holds the app icon (square PNG ≥ 512 px or SVG), `splash/` the start-page logo. `bash scripts/setup.sh --icon FILE --logo FILE` imports and validates images. `screenshots/` is free for your documentation.

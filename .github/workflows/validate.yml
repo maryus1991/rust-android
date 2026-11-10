@@ -1,0 +1,56 @@
+name: Validate
+
+# Fast quality gate: configuration, scripts, workflows and Rust code.
+# It never disables or weakens a check to make the build green.
+on:
+  pull_request:
+  push:
+    branches-ignore: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  config-and-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate configuration files
+        run: bash scripts/validate.sh
+      - name: Shell script lint (shellcheck)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck -x scripts/*.sh scripts/lib/*.sh scripts/ci/*.sh tests/*.sh
+      - name: Script and config tests
+        run: bash tests/run-all.sh
+      - name: Workflow syntax (actionlint)
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/v1.7.7/scripts/download-actionlint.bash) 1.7.7
+          ./actionlint -color
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux system libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libwebkit2gtk-4.1-dev build-essential pkg-config libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - uses: ./.github/actions/setup-rust-tauri
+        with:
+          cache-key: validate
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Clippy (warnings are errors)
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      - name: Unit tests
+        run: cargo test --locked --workspace
+      - name: Dependency audit (known vulnerabilities fail the build)
+        run: |
+          cargo install cargo-audit --locked --version 0.21.2
+          cargo audit

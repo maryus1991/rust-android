@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "statuses": {
+    "implemented": "Works and is wired to the runtime in this release.",
+    "platform-limited": "Works only on some platforms; see platforms/notes.",
+    "planned": "Not implemented yet (planned for a later phase). Cannot be enabled."
+  },
+  "features": {
+    "fileUpload":        { "label": "File Upload (<input type=file>, multiple, capture)", "status": "implemented", "toggle": true,  "platforms": ["windows","linux","android","ios"], "notes": "Provided by the OS WebView; on Android by wry's file chooser (multiple files, MIME filters, camera capture)." },
+    "camera":            { "label": "Camera (getUserMedia video)", "status": "platform-limited", "toggle": true, "platforms": ["windows","android","ios"], "notes": "Policy-gated by origin. Linux: denied (no native consent prompt yet). iOS: needs a signed build; OS prompt." },
+    "microphone":        { "label": "Microphone (getUserMedia audio)", "status": "platform-limited", "toggle": true, "platforms": ["windows","android","ios"], "notes": "Same rules as camera." },
+    "geolocation":       { "label": "Geolocation", "status": "platform-limited", "toggle": true, "platforms": ["windows","android","ios"], "notes": "Linux: denied. macOS/iOS: handled by the OS prompt, not by the origin policy." },
+    "downloads":         { "label": "Downloads", "status": "platform-limited", "toggle": true, "platforms": ["windows","linux","android"], "notes": "Desktop: saved to the Downloads folder (no progress UI). Android: system DownloadManager (background, notification). blob:/data: URLs on Android are unsupported. iOS: not supported in this release." },
+    "notifications":     { "label": "Native Notifications (via bridge + Notification API shim)", "status": "implemented", "toggle": true, "platforms": ["windows","linux","android","ios"], "notes": "Local notifications only. Push (FCM/APNs) is not part of this release." },
+    "clipboard":         { "label": "Clipboard write (bridge)", "status": "implemented", "toggle": true, "platforms": ["windows","linux","android","ios"], "notes": "Write only. Reading the clipboard from web content is deliberately not exposed." },
+    "externalApps":      { "label": "Open out-of-scope links / tel: mailto: sms: in system apps", "status": "implemented", "toggle": true, "platforms": ["windows","linux","android","ios"], "notes": "Allowlist of schemes in security.externalSchemes." },
+    "fullscreen":        { "label": "Fullscreen (HTML5 / video)", "status": "implemented", "toggle": true, "platforms": ["windows","linux","android","ios"], "notes": "Provided by the OS WebView." },
+    "networkMonitoring": { "label": "Network monitoring, offline page, auto-retry, crash/hang recovery", "status": "implemented", "toggle": true, "platforms": ["windows","linux","android","ios"], "notes": "TCP/DNS reachability probe + page heartbeat watchdog (heuristic, not a native crash callback)." },
+    "multipleWindows":   { "label": "Multiple windows (window.open popups)", "status": "platform-limited", "toggle": true, "platforms": ["windows","linux"], "notes": "Desktop only; Android/iOS do not expose popup creation in Tauri." },
+    "paymentHandoff":    { "label": "Payment/app handoff via custom URL schemes", "status": "platform-limited", "toggle": true, "platforms": ["windows","linux","android","ios"], "notes": "Only schemes listed in security.paymentSchemes. Android intent: URLs are intentionally blocked." },
+    "backgroundDownloads": { "label": "Background downloads", "status": "platform-limited", "toggle": false, "platforms": ["android"], "notes": "Automatic with downloads on Android (DownloadManager). Not available on desktop." },
+    "systemBars":        { "label": "Status/navigation bar colors", "status": "platform-limited", "toggle": false, "platforms": ["android"], "notes": "Always applied from appearance.statusBarColor/navigationBarColor on Android < 15 only (Android 15+ enforces edge-to-edge). Not implemented on iOS/desktop." },
+    "biometric":         { "label": "Biometric authentication", "status": "planned", "toggle": false, "platforms": [], "notes": "Planned (phase 2)." },
+    "nfc":               { "label": "NFC", "status": "planned", "toggle": false, "platforms": [], "notes": "Planned (phase 2)." },
+    "hapticFeedback":    { "label": "Haptic feedback", "status": "planned", "toggle": false, "platforms": [], "notes": "Planned (phase 2). navigator.vibrate works natively on Android WebView only." },
+    "deepLinks":         { "label": "Deep links", "status": "planned", "toggle": false, "platforms": [], "notes": "Planned (phase 2)." },
+    "pullToRefresh":     { "label": "Pull to refresh", "status": "planned", "toggle": false, "platforms": [], "notes": "Planned (phase 2): needs a native SwipeRefresh/UIRefreshControl integration." },
+    "webShare":          { "label": "Web Share API / share sheet", "status": "planned", "toggle": false, "platforms": [], "notes": "Planned (phase 2)." },
+    "fileSharing":       { "label": "Native file sharing", "status": "planned", "toggle": false, "platforms": [], "notes": "Planned (phase 2)." }
+  }
+}

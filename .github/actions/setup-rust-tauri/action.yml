@@ -1,0 +1,42 @@
+name: Setup Rust + Tauri CLI
+description: Installs the pinned Rust toolchain (rust-toolchain.toml), extra targets, Node and the pinned Tauri CLI.
+inputs:
+  targets:
+    description: Space separated Rust targets to add
+    required: false
+    default: ""
+  cache-key:
+    description: Extra cache key (platform name)
+    required: false
+    default: ""
+  tauri-cli-version:
+    description: Exact version of @tauri-apps/cli to install
+    required: false
+    default: "2.12.4"
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: "22"
+    - name: Install pinned Rust toolchain
+      shell: bash
+      env:
+        TARGETS: ${{ inputs.targets }}
+      run: |
+        TC="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml)"
+        rustup toolchain install "$TC" --profile minimal -c rustfmt -c clippy
+        rustup default "$TC"
+        if [ -n "$TARGETS" ]; then rustup target add --toolchain "$TC" $TARGETS; fi
+        rustc --version
+    - uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: ". -> target"
+        key: ${{ inputs.cache-key }}
+    - name: Install Tauri CLI
+      shell: bash
+      env:
+        VER: ${{ inputs.tauri-cli-version }}
+      run: |
+        npm install --global "@tauri-apps/cli@$VER"
+        tauri --version

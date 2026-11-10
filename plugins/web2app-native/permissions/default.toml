@@ -1,0 +1,3 @@
+[default]
+description = "Web2App native plugin exposes no commands to web content."
+permissions = []

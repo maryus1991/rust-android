@@ -1,0 +1,28 @@
+[package]
+name = "web2app"
+version = "0.1.0"
+description = "Universal Web2App - wraps any website in the OS WebView"
+authors = ["Web2App"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.85"
+
+[lib]
+name = "web2app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+serde_json = "1"
+url = "2"
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-clipboard-manager = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+log = "0.4"
+thiserror = "2"
+tauri-plugin-web2app-native = { path = "../plugins/web2app-native" }

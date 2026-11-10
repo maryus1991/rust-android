@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "app": {
+    "name": "Example App",
+    "identifier": "com.example.webapp",
+    "version": "1.0.0",
+    "description": "Example website packaged with Universal Web2App",
+    "author": { "name": "Example Author", "email": "author@example.com" },
+    "copyright": "Copyright (c) Example Author",
+    "defaultLanguage": "en",
+    "defaultTheme": "system"
+  },
+  "site": {
+    "name": "Example",
+    "url": "https://example.com",
+    "domain": "example.com",
+    "includeSubdomains": true,
+    "allowedDomains": [],
+    "userAgent": ""
+  },
+  "appearance": {
+    "primaryColor": "#3b82f6",
+    "backgroundColor": "#ffffff",
+    "statusBarColor": "#3b82f6",
+    "navigationBarColor": "#ffffff",
+    "splashColor": "#ffffff",
+    "iconSource": "assets/icon/icon.png",
+    "logoSource": "assets/splash/logo.png"
+  },
+  "platforms": {
+    "windows": true,
+    "linux": true,
+    "android": true,
+    "ios": true
+  },
+  "features": {
+    "fileUpload": true,
+    "camera": false,
+    "microphone": false,
+    "geolocation": false,
+    "downloads": true,
+    "notifications": false,
+    "clipboard": false,
+    "externalApps": true,
+    "fullscreen": true,
+    "networkMonitoring": true,
+    "multipleWindows": false,
+    "paymentHandoff": false
+  },
+  "security": {
+    "httpsOnly": true,
+    "outOfScopeLinks": "system-browser",
+    "externalSchemes": ["tel", "mailto", "sms"],
+    "paymentSchemes": []
+  },
+  "behavior": {
+    "loadTimeoutSecs": 20,
+    "hangTimeoutSecs": 120,
+    "crashWatchdog": true,
+    "maxAutoRecoveries": 3
+  },
+  "release": {
+    "mode": "both"
+  }
+}
