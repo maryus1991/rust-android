@@ -4,7 +4,8 @@
 <plist version="1.0">
 <dict>
     <key>ITSAppUsesNonExemptEncryption</key><false/>
-    <key>NSCameraUsageDescription</key><string>Example App needs the camera to take photos and videos for the website.</string>
-    <key>NSPhotoLibraryUsageDescription</key><string>Example App needs access to your photos so you can upload them to the website.</string>
+    <key>NSCameraUsageDescription</key><string>arolms needs the camera to take photos and videos for the website.</string>
+    <key>NSPhotoLibraryUsageDescription</key><string>arolms needs access to your photos so you can upload them to the website.</string>
+    <key>NSMicrophoneUsageDescription</key><string>arolms needs the microphone for audio features of the website.</string>
 </dict>
 </plist>

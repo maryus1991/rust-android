@@ -7,8 +7,8 @@
   ],
   "remote": {
     "urls": [
-      "https://example.com",
-      "https://*.example.com"
+      "https://aroedu.ir",
+      "https://*.aroedu.ir"
     ]
   },
   "windows": [

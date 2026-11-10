@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Example App",
+  "productName": "arolms",
   "version": "1.0.0",
-  "identifier": "com.example.webapp",
+  "identifier": "ir.aroedu",
   "build": {
     "frontendDist": "../ui"
   },
@@ -26,8 +26,8 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "publisher": "Example Author",
-    "copyright": "Copyright (c) Example Author",
+    "publisher": "mez",
+    "copyright": "Copyright (c) mez",
     "shortDescription": "Example website packaged with Universal Web2App",
     "longDescription": "Example website packaged with Universal Web2App"
   },

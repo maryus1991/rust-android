@@ -1,19 +1,22 @@
 {
   "schemaVersion": 1,
   "app": {
-    "name": "Example App",
-    "identifier": "com.example.webapp",
+    "name": "arolms",
+    "identifier": "ir.aroedu",
     "version": "1.0.0",
     "description": "Example website packaged with Universal Web2App",
-    "author": { "name": "Example Author", "email": "author@example.com" },
-    "copyright": "Copyright (c) Example Author",
-    "defaultLanguage": "en",
+    "author": {
+      "name": "mez",
+      "email": "maryus19915123@gmail.com"
+    },
+    "copyright": "Copyright (c) mez",
+    "defaultLanguage": "fa",
     "defaultTheme": "system"
   },
   "site": {
-    "name": "Example",
-    "url": "https://example.com",
-    "domain": "example.com",
+    "name": "بنیاد اموزشی آرو",
+    "url": "https://aroedu.ir",
+    "domain": "aroedu.ir",
     "includeSubdomains": true,
     "allowedDomains": [],
     "userAgent": ""
@@ -31,26 +34,30 @@
     "windows": true,
     "linux": true,
     "android": true,
-    "ios": true
+    "ios": false
   },
   "features": {
     "fileUpload": true,
     "camera": false,
-    "microphone": false,
+    "microphone": true,
     "geolocation": false,
     "downloads": true,
     "notifications": false,
-    "clipboard": false,
+    "clipboard": true,
     "externalApps": true,
     "fullscreen": true,
-    "networkMonitoring": true,
+    "networkMonitoring": false,
     "multipleWindows": false,
     "paymentHandoff": false
   },
   "security": {
     "httpsOnly": true,
     "outOfScopeLinks": "system-browser",
-    "externalSchemes": ["tel", "mailto", "sms"],
+    "externalSchemes": [
+      "tel",
+      "mailto",
+      "sms"
+    ],
     "paymentSchemes": []
   },
   "behavior": {
