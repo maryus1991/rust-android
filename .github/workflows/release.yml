@@ -162,7 +162,7 @@ jobs:
       - name: Sync configuration
         run: bash scripts/sync-config.sh
       - name: Generate the Android project (never edited by hand)
-        run: tauri android init --ci
+        run: cargo tauri android init --ci
       - name: Generate icons (also writes the Android mipmaps)
         run: bash scripts/generate-icons.sh --require
       - name: Build APK + AAB
@@ -170,7 +170,7 @@ jobs:
           ABIS: ${{ needs.prepare.outputs.android_abis }}
         run: |
           # shellcheck disable=SC2086
-          tauri android build --ci --apk --aab --target $ABIS
+          cargo tauri android build --ci --apk --aab --target $ABIS
       - name: Sign (APK via apksigner, AAB via jarsigner)
         env:
           SLUG: ${{ needs.prepare.outputs.slug }}
