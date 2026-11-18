@@ -166,8 +166,8 @@ jobs:
           fi
       - name: Sync configuration
         run: bash scripts/sync-config.sh
-      - name: Link Tauri CLI locally for Gradle
-        run: npm install --no-save @tauri-apps/cli@2.12.4
+      - name: Install Tauri CLI locally for Gradle
+        run: npm install
         working-directory: src-tauri
       - name: Generate the Android project (never edited by hand)
         run: tauri android init --ci
