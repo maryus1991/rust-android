@@ -159,10 +159,16 @@ jobs:
         run: |
           echo "NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-37" >/dev/null 2>&1 || true
+          SDK_PATH="$ANDROID_HOME/platforms"
+          if [ -d "$SDK_PATH/android-37.0" ] && [ ! -e "$SDK_PATH/android-37" ]; then
+            ln -s android-37.0 "$SDK_PATH/android-37"
+          fi
       - name: Sync configuration
         run: bash scripts/sync-config.sh
       - name: Link Tauri CLI locally for Gradle
         run: npm install --no-save @tauri-apps/cli@2.12.4
+        working-directory: src-tauri
       - name: Generate the Android project (never edited by hand)
         run: tauri android init --ci
       - name: Generate icons (also writes the Android mipmaps)
