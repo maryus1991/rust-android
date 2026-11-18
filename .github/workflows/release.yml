@@ -141,56 +141,56 @@ jobs:
           name: status-linux
           path: dist-status/*
 
-build-android:
-  needs: prepare
-  if: needs.prepare.outputs.build == 'true' && needs.prepare.outputs.android == 'true'
-  runs-on: ubuntu-latest
-  steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-java@v4
-      with:
-        distribution: temurin
-        java-version: "17"
-    - uses: ./.github/actions/setup-rust-tauri
-      with:
-        targets: aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
-        cache-key: android
-    - name: Android SDK / NDK
-      run: |
-        echo "NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
-        yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
-    - name: Sync configuration
-      run: bash scripts/sync-config.sh
-    - name: Link Tauri CLI locally for Gradle
-      run: npm install --no-save @tauri-apps/cli@2.12.4
-    - name: Generate the Android project (never edited by hand)
-      run: tauri android init --ci
-    - name: Generate icons (also writes the Android mipmaps)
-      run: bash scripts/generate-icons.sh --require
-    - name: Build APK + AAB
-      env:
-        ABIS: ${{ needs.prepare.outputs.android_abis }}
-      run: |
-        # shellcheck disable=SC2086
-        tauri android build --ci --apk --aab --target $ABIS
-    - name: Sign (APK via apksigner, AAB via jarsigner)
-      env:
-        SLUG: ${{ needs.prepare.outputs.slug }}
-        VERSION: ${{ needs.prepare.outputs.version }}
-        ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-        ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-        ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-      run: bash scripts/ci/android-sign.sh "$SLUG" "$VERSION"
-    - uses: actions/upload-artifact@v4
-      with:
-        name: dist-android
-        path: dist/*
-        if-no-files-found: error
-    - uses: actions/upload-artifact@v4
-      with:
-        name: status-android
-        path: dist-status/*
+  build-android:
+    needs: prepare
+    if: needs.prepare.outputs.build == 'true' && needs.prepare.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: ./.github/actions/setup-rust-tauri
+        with:
+          targets: aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+          cache-key: android
+      - name: Android SDK / NDK
+        run: |
+          echo "NDK_HOME=$ANDROID_NDK_LATEST_HOME" >> "$GITHUB_ENV"
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses >/dev/null || true
+      - name: Sync configuration
+        run: bash scripts/sync-config.sh
+      - name: Link Tauri CLI locally for Gradle
+        run: npm install --no-save @tauri-apps/cli@2.12.4
+      - name: Generate the Android project (never edited by hand)
+        run: tauri android init --ci
+      - name: Generate icons (also writes the Android mipmaps)
+        run: bash scripts/generate-icons.sh --require
+      - name: Build APK + AAB
+        env:
+          ABIS: ${{ needs.prepare.outputs.android_abis }}
+        run: |
+          # shellcheck disable=SC2086
+          tauri android build --ci --apk --aab --target $ABIS
+      - name: Sign (APK via apksigner, AAB via jarsigner)
+        env:
+          SLUG: ${{ needs.prepare.outputs.slug }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: bash scripts/ci/android-sign.sh "$SLUG" "$VERSION"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-android
+          path: dist/*
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: status-android
+          path: dist-status/*
 
   build-ios:
     needs: prepare
