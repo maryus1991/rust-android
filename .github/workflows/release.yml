@@ -176,6 +176,22 @@ jobs:
         working-directory: src-tauri
       - name: Generate the Android project (never edited by hand)
         run: tauri android init --ci
+      - name: Fix BuildTask.kt (node → npx)
+        run: |
+          set -euo pipefail
+          TASK=$(find src-tauri/gen/android -path '*/buildSrc/*/BuildTask.kt' | head -1)
+          if [ -z "$TASK" ]; then
+            echo "::error::BuildTask.kt not found after android init"
+            find src-tauri/gen/android -type f -name '*.kt' || true
+            exit 1
+          fi
+          echo "Patching: $TASK"
+          # تغییر executable از node به npx (هم مسیر کامل و هم ساده)
+          sed -i 's|val executable = """node"""|val executable = """npx"""|' "$TASK"
+          sed -i 's|val executable = """.*/bin/node"""|val executable = """npx"""|' "$TASK"
+          sed -i 's|val executable = """.*/node"""|val executable = """npx"""|' "$TASK"
+          echo "---- After patch ----"
+          grep -n -A6 -E 'executable|args' "$TASK" || true
       - name: Generate icons (also writes the Android mipmaps)
         run: bash scripts/generate-icons.sh --require
       - name: Build APK + AAB
