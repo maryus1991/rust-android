@@ -4,7 +4,7 @@
 <plist version="1.0">
 <dict>
     <key>ITSAppUsesNonExemptEncryption</key><false/>
-    <key>NSCameraUsageDescription</key><string>گرsorna academy needs the camera to take photos and videos for the website.</string>
-    <key>NSPhotoLibraryUsageDescription</key><string>گرsorna academy needs access to your photos so you can upload them to the website.</string>
+    <key>NSCameraUsageDescription</key><string>sorna needs the camera to take photos and videos for the website.</string>
+    <key>NSPhotoLibraryUsageDescription</key><string>sorna needs access to your photos so you can upload them to the website.</string>
 </dict>
 </plist>

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "گرsorna academy",
+  "productName": "sorna",
   "version": "1.0.0",
   "identifier": "ir.sornac",
   "build": {

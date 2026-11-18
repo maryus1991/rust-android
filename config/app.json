@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "app": {
-    "name": "گرsorna academy",
+    "name": "sorna",
     "identifier": "ir.sornac",
     "version": "1.0.0",
     "description": "Example website packaged with Universal Web2App",
@@ -14,7 +14,7 @@
     "defaultTheme": "system"
   },
   "site": {
-    "name": "گ�روه اموزشی سورنا",
+    "name": "گروه اموزشی سورنا",
     "url": "https://sornac.ir",
     "domain": "sornac.ir",
     "includeSubdomains": true,
