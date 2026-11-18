@@ -1,24 +1,26 @@
 {
   "schemaVersion": 1,
   "app": {
-    "name": "arolms",
-    "identifier": "ir.aroedu",
+    "name": "گرsorna academy",
+    "identifier": "ir.sornac",
     "version": "1.0.0",
     "description": "Example website packaged with Universal Web2App",
     "author": {
       "name": "mez",
       "email": "maryus19915123@gmail.com"
     },
-    "copyright": "Copyright (c) mez",
+    "copyright": "all right reserve",
     "defaultLanguage": "fa",
     "defaultTheme": "system"
   },
   "site": {
-    "name": "بنیاد اموزشی آرو",
-    "url": "https://aroedu.ir",
-    "domain": "aroedu.ir",
+    "name": "گ�روه اموزشی سورنا",
+    "url": "https://sornac.ir",
+    "domain": "sornac.ir",
     "includeSubdomains": true,
-    "allowedDomains": [],
+    "allowedDomains": [
+      "*.arvanstorage.ir"
+    ],
     "userAgent": ""
   },
   "appearance": {
@@ -39,14 +41,14 @@
   "features": {
     "fileUpload": true,
     "camera": false,
-    "microphone": true,
+    "microphone": false,
     "geolocation": false,
     "downloads": true,
     "notifications": false,
     "clipboard": true,
     "externalApps": true,
     "fullscreen": true,
-    "networkMonitoring": false,
+    "networkMonitoring": true,
     "multipleWindows": false,
     "paymentHandoff": false
   },
@@ -55,8 +57,8 @@
     "outOfScopeLinks": "system-browser",
     "externalSchemes": [
       "tel",
-      "mailto",
-      "sms"
+      "sms",
+      "mailto"
     ],
     "paymentSchemes": []
   },

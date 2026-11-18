@@ -6,6 +6,20 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PASS=0; FAIL=0; FAILED=()
 
+# Tests must behave identically on a laptop and inside GitHub Actions: never inherit the runner's
+# GITHUB_* variables (prepare.sh would write to $GITHUB_OUTPUT instead of the test's own file).
+for v in $(env | sed -n 's/^\(GITHUB_[A-Z_]*\)=.*/\1/p') CI RUNNER_TEMP W2A_RELEASE_EXISTS INPUT_PUBLISH INPUT_OVERWRITE; do unset "$v"; done
+
+# Required tools: fail loudly (never skip silently) when one is missing.
+MISSING=()
+for tool in jq python3 convert tar timeout; do command -v "$tool" >/dev/null 2>&1 || MISSING+=("$tool"); done
+if [ ${#MISSING[@]} -gt 0 ]; then
+  echo "tests/run-all.sh needs: ${MISSING[*]} (Debian/Ubuntu: sudo apt install jq python3 imagemagick)" >&2
+  exit 2
+fi
+# shellcheck source=../scripts/lib/common.sh
+. "$ROOT/scripts/lib/common.sh"
+
 t() { # t "name" command...
   local name="$1"; shift
   if ( set -e; "$@" ) >/tmp/w2a-test.out 2>&1; then PASS=$((PASS+1)); printf 'PASS  %s\n' "$name"
@@ -25,7 +39,26 @@ setup_in() { local d="$1"; shift; ( cd "$d" && timeout 120 bash scripts/setup.sh
 TMPS=()
 cleanup() { for d in "${TMPS[@]+"${TMPS[@]}"}"; do rm -rf "$d"; done; }
 trap cleanup EXIT
-new_repo() { local d; d="$(fresh_repo)"; TMPS+=("$d"); echo "$d"; }
+# Every test repo starts from the pristine fixture (tests/fixtures/app.json), never from the user's own
+# config/app.json, and its derived files are regenerated so the copy is internally consistent.
+new_repo() {
+  local d; d="$(fresh_repo)"; TMPS+=("$d")
+  cp "$ROOT/tests/fixtures/app.json" "$d/config/app.json"
+  ( cd "$d" && bash scripts/sync-config.sh >/dev/null )
+  echo "$d"
+}
+# mkpng WIDTH HEIGHT FILE: writes a valid solid-color PNG with no external tools.
+mkpng() {
+  python3 - "$1" "$2" "$3" <<'PY'
+import sys, zlib, struct
+w, h, path = int(sys.argv[1]), int(sys.argv[2]), sys.argv[3]
+def chunk(t, d): c = struct.pack(">I", len(d)) + t + d; return c + struct.pack(">I", zlib.crc32(t + d) & 0xffffffff)
+raw = b"".join(b"\x00" + b"\xff\x88\x00" * w for _ in range(h))
+open(path, "wb").write(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + chunk(b"IDAT", zlib.compress(raw)) + chunk(b"IEND", b""))
+PY
+}
+# valid_plist FILE: parses with Python's plistlib (a real plist parser) and prints the dict as JSON.
+valid_plist() { python3 -c 'import plistlib,sys,json; print(json.dumps(plistlib.load(open(sys.argv[1],"rb"))))' "$1"; }
 
 # ---------------------------------------------------------------- validation
 test_default_config_valid() { bash "$ROOT/scripts/validate.sh" --quiet; }
@@ -42,8 +75,8 @@ test_validate_rejects() { # each bad value must fail validation
 }
 test_validate_icon_checks() {
   local d; d="$(new_repo)"
-  ( cd "$d" && convert -size 300x200 xc:red assets/icon/icon.png && expect_fail bash scripts/validate.sh --quiet --config-only )
-  ( cd "$d" && convert -size 600x600 xc:red assets/icon/icon.png && bash scripts/validate.sh --quiet --config-only )
+  ( cd "$d" && mkpng 300 200 assets/icon/icon.png && expect_fail bash scripts/validate.sh --quiet --config-only )
+  ( cd "$d" && mkpng 600 600 assets/icon/icon.png && bash scripts/validate.sh --quiet --config-only )
   ( cd "$d" && echo "not an image" > assets/icon/icon.png && expect_fail bash scripts/validate.sh --quiet --config-only )
 }
 test_validate_detects_stale_generated_files() {
@@ -58,7 +91,7 @@ test_secrets_not_allowed_in_config() {
 # ---------------------------------------------------------------- setup wizard
 test_setup_applies_values_and_generates() {
   local d; d="$(new_repo)"
-  convert -size 1200x1200 xc:'#ff8800' "$d/new-icon.png"
+  mkpng 1200 1200 "$d/new-icon.png"
   setup_in "$d" --icon "$d/new-icon.png" --set site.url=https://shop.mydomain.ir --set app.name="My Shop" --set app.identifier=ir.mydomain.shop \
     --set features.camera=true --set features.geolocation=true --set 'site.allowedDomains=["login.mydomain.ir"]'
   cd "$d"
@@ -73,10 +106,10 @@ test_setup_applies_values_and_generates() {
   [ -f config/setup-report.md ] && grep -q 'shop.mydomain.ir' config/setup-report.md
   [ "$(png_w assets/icon/icon.png)" = 1200 ]
 }
-png_w() { od -An -tu1 -j19 -N1 "$1" | tr -d ' ' >/dev/null; identify -format '%w' "$1"; }
+png_w() { png_size "$1" | cut -d' ' -f1; }
 test_setup_rolls_back_on_invalid_icon() {
   local d; d="$(new_repo)"; cp "$d/config/app.json" /tmp/w2a-before.json
-  convert -size 300x200 xc:red "$d/bad.png"
+  mkpng 300 200 "$d/bad.png"
   expect_fail setup_in "$d" --icon "$d/bad.png" --set app.name=Changed
   diff <(jq -S . /tmp/w2a-before.json) <(jq -S . "$d/config/app.json")
 }
@@ -97,7 +130,7 @@ test_setup_is_idempotent() {
 test_setup_interactive_defaults_keep_config() {
   local d; d="$(new_repo)"; yes '' | head -200 >/tmp/w2a-answers.txt
   ( cd "$d" && timeout 120 bash scripts/setup.sh --skip-icons </tmp/w2a-answers.txt )
-  diff <(jq -S . "$ROOT/config/app.json") <(jq -S . "$d/config/app.json")
+  diff <(jq -S . "$ROOT/tests/fixtures/app.json") <(jq -S . "$d/config/app.json")
 }
 test_setup_interactive_answers() {
   local d; d="$(new_repo)"
@@ -122,7 +155,6 @@ test_setup_invalid_answer_reprompts() {
   [ "$(jq -r .site.url "$d/config/app.json")" = https://ok.example.org ]
 }
 test_setup_converts_jpeg_icon() {
-  command -v convert >/dev/null || return 0
   local d; d="$(new_repo)"; convert -size 1024x1024 xc:blue "$d/i.jpg"
   setup_in "$d" --icon "$d/i.jpg"
   [ "$(jq -r .appearance.iconSource "$d/config/app.json")" = assets/icon/icon.png ]
@@ -139,12 +171,34 @@ test_manifest_only_has_enabled_permissions() {
   local m="$d/plugins/web2app-native/android/src/main/AndroidManifest.xml"
   grep -q 'INTERNET' "$m"
   for p in CAMERA RECORD_AUDIO ACCESS_FINE_LOCATION POST_NOTIFICATIONS WRITE_EXTERNAL_STORAGE; do no grep -q "$p" "$m"; done
-  xmllint --noout "$m" "$d/src-tauri/Info.ios.plist"
+  python3 -c 'import sys, xml.etree.ElementTree as E; [E.parse(f) for f in sys.argv[1:]]' "$m"
+  valid_plist "$d/src-tauri/Info.ios.plist" >/dev/null
   [ "$(jq -r '.plugins["web2app-native"].downloads' "$d/src-tauri/tauri.conf.json")" = false ]
 }
 test_xml_escaping_in_plist() {
-  local d; d="$(new_repo)"; setup_in "$d" --set 'app.name=A & B <x>' --set features.camera=true
-  xmllint --noout "$d/src-tauri/Info.ios.plist"
+  local d name json; d="$(new_repo)"
+  name='Tom & "Jerry'"'"'s" <Café> فروشگاه ]]> &amp;'
+  setup_in "$d" --set "app.name=$name" --set features.camera=true --set features.microphone=true --set features.geolocation=true
+  json="$(valid_plist "$d/src-tauri/Info.ios.plist")"
+  # every usage description must contain the exact, unescaped name after parsing (round trip)
+  [ "$(jq -r --arg n "$name" '[.NSCameraUsageDescription, .NSMicrophoneUsageDescription, .NSLocationWhenInUseUsageDescription, .NSPhotoLibraryUsageDescription] | map(startswith($n)) | all' <<<"$json")" = true ]
+  grep -q '&amp;amp;' "$d/src-tauri/Info.ios.plist"     # a literal "&amp;" in the name is escaped, not interpreted
+  grep -q '&quot;Jerry&apos;s&quot;' "$d/src-tauri/Info.ios.plist"
+}
+test_plist_strips_xml_illegal_control_characters() {
+  local d json; d="$(new_repo)"
+  setup_in "$d" --set "$(printf 'app.name=Bad\001Name\037End')" --set features.camera=true
+  json="$(valid_plist "$d/src-tauri/Info.ios.plist")"
+  jq -e '.NSCameraUsageDescription | startswith("BadNameEnd needs")' <<<"$json" >/dev/null
+}
+test_plist_is_valid_for_default_and_all_features() {
+  local d json; d="$(new_repo)"
+  setup_in "$d" --set features.camera=true --set features.microphone=true --set features.geolocation=true
+  json="$(valid_plist "$d/src-tauri/Info.ios.plist")"
+  jq -e 'has("NSCameraUsageDescription") and has("NSMicrophoneUsageDescription") and has("NSLocationWhenInUseUsageDescription") and (.ITSAppUsesNonExemptEncryption == false)' <<<"$json" >/dev/null
+  setup_in "$d" --set features.camera=false --set features.microphone=false --set features.geolocation=false --set features.fileUpload=false
+  json="$(valid_plist "$d/src-tauri/Info.ios.plist")"
+  jq -e 'keys == ["ITSAppUsesNonExemptEncryption"]' <<<"$json" >/dev/null
 }
 test_no_generated_dirs_touched() { ! grep -RIn 'gen/android\|gen/apple' "$ROOT"/scripts/sync-config.sh "$ROOT"/scripts/setup.sh | grep -v '^\S*:[0-9]*:#' | grep -qE '(>|cp |mv |sed -i|tee)'; }
 
@@ -193,12 +247,27 @@ test_no_secrets_in_repo() {
 }
 
 # ---------------------------------------------------------------- CI decision logic
-prep() { # prep <event> <ref> <exists> [mode]
+# prep <event> <ref> <release-exists> [mode]: runs prepare.sh exactly like Actions does (outputs go to the
+# $GITHUB_OUTPUT file) and prints that file. Exit status = prepare.sh's.
+prep() {
   local d; d="$(new_repo)"
-  [ -n "${4:-}" ] && ( cd "$d" && jq --arg m "$4" '.release.mode=$m' config/app.json >/tmp/w2a-m.json && cp /tmp/w2a-m.json config/app.json )
-  ( cd "$d" && W2A_RELEASE_EXISTS="$3" GITHUB_EVENT_NAME="$1" GITHUB_REF="$2" GITHUB_REPOSITORY=a/b INPUT_PUBLISH="${INPUT_PUBLISH:-true}" INPUT_OVERWRITE="${INPUT_OVERWRITE:-false}" bash scripts/ci/prepare.sh )
+  if [ -n "${4:-}" ]; then ( cd "$d" && jq --arg m "$4" '.release.mode=$m' config/app.json >config/app.tmp && mv config/app.tmp config/app.json ); fi
+  run_prepare "$d" "$1" "$2" "$3"
+}
+run_prepare() { # run_prepare <repo> <event> <ref> <exists>
+  local d="$1"; : >"$d/gh_output"; : >"$d/gh_summary"
+  ( cd "$d" && W2A_RELEASE_EXISTS="$4" GITHUB_EVENT_NAME="$2" GITHUB_REF="$3" GITHUB_REPOSITORY=a/b \
+      GITHUB_OUTPUT="$d/gh_output" GITHUB_STEP_SUMMARY="$d/gh_summary" \
+      INPUT_PUBLISH="${INPUT_PUBLISH:-true}" INPUT_OVERWRITE="${INPUT_OVERWRITE:-false}" bash scripts/ci/prepare.sh ) >/dev/null || return 1
+  cat "$d/gh_output"
 }
 val() { sed -n "s/^$1=//p"; }
+# prep_with <jq-filter-on-app.json>: branch push of a modified configuration
+prep_with() {
+  local d; d="$(new_repo)"
+  ( cd "$d" && jq "$1" config/app.json >config/app.tmp && mv config/app.tmp config/app.json && bash scripts/sync-config.sh >/dev/null )
+  run_prepare "$d" push refs/heads/main false
+}
 test_ci_branch_push_publishes_new_version() { local o; o="$(prep push refs/heads/main false)"; [ "$(val build <<<"$o")" = true ] && [ "$(val publish <<<"$o")" = true ] && [ "$(val tag <<<"$o")" = v1.0.0 ]; }
 test_ci_branch_push_skips_existing_release() { local o; o="$(prep push refs/heads/main true)"; [ "$(val build <<<"$o")" = false ] && [ "$(val publish <<<"$o")" = false ] && [ -n "$(val reason <<<"$o")" ]; }
 test_ci_tag_must_match_version() { expect_fail prep push refs/tags/v9.9.9 false; }
@@ -206,12 +275,47 @@ test_ci_matching_tag_publishes() { local o; o="$(prep push refs/tags/v1.0.0 fals
 test_ci_mode_tag_ignores_branch_push() { local o; o="$(prep push refs/heads/main false tag)"; [ "$(val build <<<"$o")" = false ]; }
 test_ci_mode_branch_ignores_tag_push() { local o; o="$(prep push refs/tags/v1.0.0 false branch)"; [ "$(val build <<<"$o")" = false ]; }
 test_ci_dispatch_existing_needs_overwrite() { expect_fail prep workflow_dispatch refs/heads/main true; INPUT_OVERWRITE=true prep workflow_dispatch refs/heads/main true >/dev/null; }
+test_ci_slug_ascii_names() {
+  [ "$(prep_with '.app.name="My Shop App"' | val slug)" = My-Shop-App ]
+  [ "$(prep_with '.app.name="shop.v2_pro"' | val slug)" = shop.v2_pro ]
+}
 test_ci_slug_falls_back_for_non_latin_names() {
-  local d; d="$(new_repo)"; ( cd "$d" && jq '.app.name="فروشگاه" | .app.identifier="ir.shop.mystore"' config/app.json >/tmp/w2a-s.json && cp /tmp/w2a-s.json config/app.json && bash scripts/sync-config.sh >/dev/null \
-    && W2A_RELEASE_EXISTS=false GITHUB_REPOSITORY=a/b bash scripts/ci/prepare.sh | val slug | grep -qx mystore )
+  # Persian / Arabic / CJK-only names have no usable ASCII: use the last package-id segment
+  [ "$(prep_with '.app.name="فروشگاه من" | .app.identifier="ir.shop.mystore"' | val slug)" = mystore ]
+  [ "$(prep_with '.app.name="متجر" | .app.identifier="sa.store.matjar"' | val slug)" = matjar ]
+  [ "$(prep_with '.app.name="商店" | .app.identifier="cn.shop.shangdian"' | val slug)" = shangdian ]
+}
+test_ci_slug_keeps_ascii_part_of_mixed_names() {
+  [ "$(prep_with '.app.name="فروشگاه Shop"' | val slug)" = Shop ]
+  [ "$(prep_with '.app.name="Café Pro"' | val slug)" = Caf-Pro ]     # deterministic: no locale-dependent transliteration
+}
+test_ci_slug_is_locale_independent() {
+  local a b; a="$(LC_ALL=C prep_with '.app.name="Zoë Æther"' | val slug)"; b="$(LC_ALL=C.UTF-8 prep_with '.app.name="Zoë Æther"' | val slug)"
+  [ "$a" = "$b" ] && [ -n "$a" ]
+}
+test_ci_slug_never_empty_or_path_like() {
+  local s; s="$(prep_with '.app.name="../../x/ ..  "' | val slug)"
+  [[ "$s" =~ ^[A-Za-z0-9._-]+$ ]] && [ "${s#.}" = "$s" ] && [[ "$s" != */* ]]
 }
 test_ci_prerelease_flag() {
-  local d o; d="$(new_repo)"; ( cd "$d" && jq '.app.version="2.0.0-beta.1"' config/app.json >/tmp/w2a-p.json && cp /tmp/w2a-p.json config/app.json && bash scripts/sync-config.sh >/dev/null && W2A_RELEASE_EXISTS=false GITHUB_REPOSITORY=a/b bash scripts/ci/prepare.sh | val prerelease | grep -qx true )
+  [ "$(prep_with '.app.version="2.0.0-beta.1"' | val prerelease)" = true ]
+  [ "$(prep_with '.app.version="2.0.0-rc.2+build.5"' | val prerelease)" = true ]
+  [ "$(prep_with '.app.version="2.0.0"' | val prerelease)" = false ]
+  [ "$(prep_with '.app.version="2.0.0-beta.1"' | val tag)" = v2.0.0-beta.1 ]
+}
+test_ci_tag_prerelease_must_match_exact_version() {
+  local d; d="$(new_repo)"; ( cd "$d" && jq '.app.version="2.0.0-beta.1"' config/app.json >config/app.tmp && mv config/app.tmp config/app.json && bash scripts/sync-config.sh >/dev/null )
+  [ "$(run_prepare "$d" push refs/tags/v2.0.0-beta.1 false | val publish)" = true ]
+  expect_fail run_prepare "$d" push refs/tags/v2.0.0 false
+}
+test_ci_outputs_go_to_github_output_file() {
+  local d; d="$(new_repo)"; run_prepare "$d" push refs/heads/main false >/dev/null
+  grep -q '^build=true$' "$d/gh_output" && grep -q 'Release plan' "$d/gh_summary"
+}
+test_ci_release_exists_detection_uses_tag_of_config_version() {
+  # existing release -> nothing is built or published, with an explanation
+  local o; o="$(prep push refs/heads/main true)"
+  [ "$(val build <<<"$o")" = false ] && [ "$(val publish <<<"$o")" = false ] && [[ "$(val reason <<<"$o")" == *"v1.0.0 already exists"* ]]
 }
 test_collect_names_and_required() {
   local d; d="$(mktemp -d)"; TMPS+=("$d"); mkdir -p "$d"/b/{msi,nsis,deb,appimage}

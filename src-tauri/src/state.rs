@@ -26,7 +26,12 @@ impl AppState {
         let policy = DomainPolicy::from_config(&cfg)?;
         let start_url =
             Url::parse(&cfg.site.url).map_err(|e| ConfigError::Invalid(e.to_string()))?;
-        let site_host = start_url.host_str().unwrap_or_default().to_string();
+        // IPv6 hosts are bracketed in URLs (`[::1]`); socket address resolution needs them bare.
+        let site_host = start_url
+            .host_str()
+            .unwrap_or_default()
+            .trim_matches(|c| c == '[' || c == ']')
+            .to_string();
         let site_port = start_url.port_or_known_default().unwrap_or(443);
         Ok(Self {
             cfg,

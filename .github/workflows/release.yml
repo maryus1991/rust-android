@@ -27,8 +27,10 @@ on:
 permissions:
   contents: read
 
+# ONE release pipeline at a time per repository (branch push + tag push for the same version must not
+# race to create the same release; the second run then sees the release and skips cleanly).
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.repository }}
   cancel-in-progress: false
 
 env:

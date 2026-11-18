@@ -7,8 +7,9 @@
   ],
   "remote": {
     "urls": [
-      "https://aroedu.ir",
-      "https://*.aroedu.ir"
+      "https://sornac.ir",
+      "https://*.sornac.ir",
+      "https://*.arvanstorage.ir"
     ]
   },
   "windows": [

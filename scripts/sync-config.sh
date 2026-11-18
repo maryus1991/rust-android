@@ -92,7 +92,12 @@ ok "Android manifest permissions generated"
 # ---- iOS usage descriptions (src-tauri/Info.ios.plist is merged by the Tauri CLI) -----
 PLIST="$W2A_ROOT/src-tauri/Info.ios.plist"
 NAME="$(jq -r '.app.name' "$APP_JSON")"
-xml_escape() { sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
+# Escapes the five XML special characters and drops control characters that are illegal in XML 1.0.
+# UTF-8 text (Persian, Arabic, CJK...) passes through unchanged.
+xml_escape() {
+  LC_ALL=C tr -d '\000-\010\013\014\016-\037' \
+    | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/"/\&quot;/g' -e "s/'/\&apos;/g"
+}
 ENAME="$(printf '%s' "$NAME" | xml_escape)"
 {
   echo '<?xml version="1.0" encoding="UTF-8"?>'

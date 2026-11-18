@@ -271,9 +271,64 @@ pub fn validate(cfg: &AppConfig) -> Result<(), ConfigError> {
     Ok(())
 }
 
+/// Fixed configuration used by unit tests. Tests must NOT depend on the user's real
+/// `config/app.json` (it is edited by `scripts/setup.sh`); only the tests that explicitly
+/// check the embedded file (`embedded_config_is_valid`, capability consistency) read it.
+#[cfg(test)]
+pub(crate) const TEST_APP_JSON: &str = r##"{
+  "schemaVersion": 1,
+  "app": { "name": "Test App", "identifier": "com.example.testapp", "version": "1.0.0",
+           "description": "fixture", "defaultLanguage": "en", "defaultTheme": "system" },
+  "site": { "name": "Example", "url": "https://example.com", "includeSubdomains": true,
+            "allowedDomains": [], "userAgent": "" },
+  "appearance": { "primaryColor": "#3b82f6", "backgroundColor": "#ffffff", "splashColor": "#ffffff" },
+  "features": { "fileUpload": true, "camera": false, "microphone": false, "geolocation": false,
+                "downloads": true, "notifications": false, "clipboard": false, "externalApps": true,
+                "fullscreen": true, "networkMonitoring": true, "multipleWindows": false, "paymentHandoff": false },
+  "security": { "httpsOnly": true, "outOfScopeLinks": "system-browser",
+                "externalSchemes": ["tel", "mailto", "sms"], "paymentSchemes": [] },
+  "behavior": { "loadTimeoutSecs": 20, "hangTimeoutSecs": 120, "crashWatchdog": true, "maxAutoRecoveries": 3 }
+}"##;
+
+/// Parsed fixture with a closure applied, for tests.
+#[cfg(test)]
+pub(crate) fn test_config_with(f: impl FnOnce(&mut AppConfig)) -> AppConfig {
+    let mut cfg = parse_and_validate(TEST_APP_JSON).expect("test fixture must be valid");
+    f(&mut cfg);
+    cfg
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fixture_is_valid() {
+        parse_and_validate(TEST_APP_JSON).expect("fixture must validate");
+    }
+
+    #[test]
+    fn rejects_malformed_json_and_missing_site() {
+        assert!(parse_and_validate("{ not json").is_err());
+        assert!(parse_and_validate("{}").is_err());
+    }
+
+    #[test]
+    fn explicit_overrides_beat_defaults() {
+        let mut v: Value = serde_json::from_str(TEST_APP_JSON).unwrap();
+        v["security"].as_object_mut().unwrap().remove("httpsOnly");
+        v["behavior"]
+            .as_object_mut()
+            .unwrap()
+            .remove("crashWatchdog");
+        let defaults = parse_and_validate(&v.to_string()).unwrap();
+        assert!(defaults.security.https_only && defaults.behavior.crash_watchdog);
+        v["security"]["httpsOnly"] = Value::Bool(false);
+        v["behavior"]["crashWatchdog"] = Value::Bool(false);
+        v["site"]["url"] = Value::String("http://127.0.0.1:8080".into());
+        let c = parse_and_validate(&v.to_string()).unwrap();
+        assert!(!c.security.https_only && !c.behavior.crash_watchdog);
+    }
 
     #[test]
     fn embedded_config_is_valid() {
@@ -282,21 +337,21 @@ mod tests {
 
     #[test]
     fn rejects_planned_feature() {
-        let mut v: Value = serde_json::from_str(APP_JSON).unwrap();
+        let mut v: Value = serde_json::from_str(TEST_APP_JSON).unwrap();
         v["features"]["biometric"] = Value::Bool(true);
         assert!(parse_and_validate(&v.to_string()).is_err());
     }
 
     #[test]
     fn rejects_unknown_feature() {
-        let mut v: Value = serde_json::from_str(APP_JSON).unwrap();
+        let mut v: Value = serde_json::from_str(TEST_APP_JSON).unwrap();
         v["features"]["teleport"] = Value::Bool(true);
         assert!(parse_and_validate(&v.to_string()).is_err());
     }
 
     #[test]
     fn rejects_http_when_https_only() {
-        let mut v: Value = serde_json::from_str(APP_JSON).unwrap();
+        let mut v: Value = serde_json::from_str(TEST_APP_JSON).unwrap();
         v["site"]["url"] = Value::String("http://example.com".into());
         assert!(parse_and_validate(&v.to_string()).is_err());
     }
@@ -308,18 +363,18 @@ mod tests {
             ("identifier", "single"),
             ("version", "1.0"),
         ] {
-            let mut v: Value = serde_json::from_str(APP_JSON).unwrap();
+            let mut v: Value = serde_json::from_str(TEST_APP_JSON).unwrap();
             v["app"][path] = Value::String(val.into());
             assert!(parse_and_validate(&v.to_string()).is_err(), "{path}={val}");
         }
-        let mut v: Value = serde_json::from_str(APP_JSON).unwrap();
+        let mut v: Value = serde_json::from_str(TEST_APP_JSON).unwrap();
         v["appearance"]["primaryColor"] = Value::String("blue".into());
         assert!(parse_and_validate(&v.to_string()).is_err());
     }
 
     #[test]
     fn rejects_dangerous_scheme_allowlist() {
-        let mut v: Value = serde_json::from_str(APP_JSON).unwrap();
+        let mut v: Value = serde_json::from_str(TEST_APP_JSON).unwrap();
         v["security"]["externalSchemes"] = serde_json::json!(["tel", "javascript"]);
         assert!(parse_and_validate(&v.to_string()).is_err());
     }

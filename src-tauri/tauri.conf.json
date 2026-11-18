@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "arolms",
+  "productName": "گرsorna academy",
   "version": "1.0.0",
-  "identifier": "ir.aroedu",
+  "identifier": "ir.sornac",
   "build": {
     "frontendDist": "../ui"
   },
@@ -27,7 +27,7 @@
       "icons/icon.ico"
     ],
     "publisher": "mez",
-    "copyright": "Copyright (c) mez",
+    "copyright": "all right reserve",
     "shortDescription": "Example website packaged with Universal Web2App",
     "longDescription": "Example website packaged with Universal Web2App"
   },

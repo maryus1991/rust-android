@@ -19,9 +19,11 @@ IDENT="$(jq -r '.app.identifier' "$APP_JSON")"
 MODE="$(jq -r '.release.mode // "both"' "$APP_JSON")"
 TAG="v$VERSION"
 
-# File-name slug: ASCII letters/digits/._- only; falls back to the last identifier segment (e.g. non-Latin names).
-SLUG="$(printf '%s' "$NAME" | iconv -f utf-8 -t ascii//TRANSLIT 2>/dev/null | tr -c 'A-Za-z0-9._\n' '-' | sed -E 's/-+/-/g; s/^-+//; s/-+$//' || true)"
-[ -n "$SLUG" ] || SLUG="${IDENT##*.}"
+# File-name slug: ASCII letters/digits/._ only, everything else becomes "-". Deliberately NOT transliterated:
+# iconv //TRANSLIT depends on the runner's locale, and GitHub rewrites non-ASCII asset names anyway.
+# Names without enough ASCII (e.g. Persian/Arabic/CJK) fall back to the last segment of the package id.
+SLUG="$(printf '%s' "$NAME" | LC_ALL=C sed -E 's/[^A-Za-z0-9._]+/-/g; s/^[-._]+//; s/[-._]+$//')"
+[ "${#SLUG}" -ge 2 ] || SLUG="${IDENT##*.}"
 
 EVENT="${GITHUB_EVENT_NAME:-push}"
 REF="${GITHUB_REF:-refs/heads/main}"

@@ -295,9 +295,7 @@ mod tests {
     use crate::config;
 
     fn state_with(f: impl FnOnce(&mut config::AppConfig)) -> AppState {
-        let mut cfg = config::embedded().unwrap();
-        f(&mut cfg);
-        AppState::new(cfg).unwrap()
+        AppState::new(config::test_config_with(f)).unwrap()
     }
 
     fn u(s: &str) -> Url {
@@ -317,6 +315,82 @@ mod tests {
         );
         assert_eq!(origin_of(&u("https://evil.com/"), &st), None);
         assert_eq!(origin_of(&u("https://example.com.evil.com/"), &st), None);
+    }
+
+    #[test]
+    fn origin_classification_edge_cases() {
+        let st = state_with(|_| {});
+        // bundled pages on every platform's custom protocol
+        assert_eq!(
+            origin_of(&u("http://tauri.localhost/offline.html"), &st),
+            Some(Origin::Local)
+        );
+        assert_eq!(
+            origin_of(&u("https://tauri.localhost/offline.html"), &st),
+            Some(Origin::Local)
+        );
+        // look-alikes / unsupported schemes / missing hosts are never trusted
+        for bad in [
+            "http://localhost/",
+            "http://127.0.0.1/",
+            "https://[::1]/",
+            "file:///etc/passwd",
+            "about:blank",
+            "data:text/html,hi",
+            "javascript:alert(1)",
+            "blob:https://example.com/x",
+            "https://tauri.localhost.evil.com/",
+            "http://example.com/",
+            "https://example.com:8443/",
+            "https://user:pw@example.com/",
+            "https://example.com.evil.com/",
+        ] {
+            assert_eq!(origin_of(&u(bad), &st), None, "{bad}");
+        }
+        // subdomains follow includeSubdomains
+        assert_eq!(
+            origin_of(&u("https://app.example.com/"), &st),
+            Some(Origin::Remote)
+        );
+        let strict = state_with(|c| c.site.include_subdomains = false);
+        assert_eq!(origin_of(&u("https://app.example.com/"), &strict), None);
+        assert_eq!(
+            origin_of(&u("https://example.com/"), &strict),
+            Some(Origin::Remote)
+        );
+    }
+
+    #[test]
+    fn loopback_ipv4_ipv6_and_http_only_with_explicit_opt_in() {
+        let v4 = state_with(|c| {
+            c.security.https_only = false;
+            c.site.url = "http://127.0.0.1:8080/".into();
+        });
+        assert_eq!(
+            origin_of(&u("http://127.0.0.1:8080/x"), &v4),
+            Some(Origin::Remote)
+        );
+        assert_eq!(origin_of(&u("http://127.0.0.1:8081/x"), &v4), None);
+        assert_eq!(origin_of(&u("http://127.0.0.2:8080/x"), &v4), None);
+        assert_eq!(origin_of(&u("http://localhost:8080/x"), &v4), None);
+        let v6 = state_with(|c| {
+            c.security.https_only = false;
+            c.site.url = "http://[::1]:8080/".into();
+        });
+        assert_eq!(
+            origin_of(&u("http://[::1]:8080/"), &v6),
+            Some(Origin::Remote)
+        );
+        assert_eq!(origin_of(&u("http://[::2]:8080/"), &v6), None);
+        // an IP site never gets a wildcard sub-domain rule
+        let ip = state_with(|c| c.site.url = "https://203.0.113.7/".into());
+        assert_eq!(
+            origin_of(&u("https://203.0.113.7/"), &ip),
+            Some(Origin::Remote)
+        );
+        assert_eq!(origin_of(&u("https://203.0.113.8/"), &ip), None);
+        // "sub-domains" of an IP are not even valid URLs, so they can never reach the policy
+        assert!(Url::parse("https://a.203.0.113.7/").is_err());
     }
 
     #[test]

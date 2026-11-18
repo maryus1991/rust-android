@@ -113,7 +113,7 @@ bash scripts/validate.sh --quiet --config-only
 bash scripts/sync-config.sh
 bash scripts/generate-icons.sh --require
 
-PLAN="$(W2A_RELEASE_EXISTS=false GITHUB_REPOSITORY=local/local GITHUB_EVENT_NAME=workflow_dispatch INPUT_PUBLISH=false bash scripts/ci/prepare.sh)"
+PLAN="$(env -u GITHUB_OUTPUT -u GITHUB_STEP_SUMMARY W2A_RELEASE_EXISTS=false GITHUB_REPOSITORY=local/local GITHUB_EVENT_NAME=workflow_dispatch INPUT_PUBLISH=false bash scripts/ci/prepare.sh)"
 plan() { printf '%s\n' "$PLAN" | sed -n "s/^$1=//p" | head -n1; }
 SLUG="$(plan slug)"; VERSION="$(plan version)"
 TAURI="$(tauri_cmd)"; DBG=(); [ "$DEBUG" -eq 1 ] && DBG=(--debug)

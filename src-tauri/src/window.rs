@@ -262,9 +262,7 @@ mod tests {
     use crate::config;
 
     fn state(f: impl FnOnce(&mut config::AppConfig)) -> AppState {
-        let mut cfg = config::embedded().unwrap();
-        f(&mut cfg);
-        AppState::new(cfg).unwrap()
+        AppState::new(config::test_config_with(f)).unwrap()
     }
 
     fn u(s: &str) -> Url {
@@ -303,6 +301,71 @@ mod tests {
             permission_decision(&st, Some(&evil), PermissionKind::Camera),
             PermissionResponse::Deny
         );
+        assert_eq!(
+            permission_decision(&st, None, PermissionKind::Camera),
+            PermissionResponse::Deny
+        );
+    }
+
+    #[test]
+    fn permission_defaults_and_overrides() {
+        let ok = u("https://example.com/");
+        // defaults: everything denied
+        let st = state(|_| {});
+        for k in [
+            PermissionKind::Camera,
+            PermissionKind::Microphone,
+            PermissionKind::Geolocation,
+        ] {
+            assert_eq!(
+                permission_decision(&st, Some(&ok), k),
+                PermissionResponse::Deny
+            );
+        }
+        // each explicit override enables exactly its own kind
+        let st = state(|c| c.features.geolocation = true);
+        assert_eq!(
+            permission_decision(&st, Some(&ok), PermissionKind::Geolocation),
+            PermissionResponse::Default
+        );
+        assert_eq!(
+            permission_decision(&st, Some(&ok), PermissionKind::Camera),
+            PermissionResponse::Deny
+        );
+        let st = state(|c| c.features.microphone = true);
+        assert_eq!(
+            permission_decision(&st, Some(&ok), PermissionKind::Microphone),
+            PermissionResponse::Default
+        );
+        assert_eq!(
+            permission_decision(&st, Some(&ok), PermissionKind::Camera),
+            PermissionResponse::Deny
+        );
+    }
+
+    #[test]
+    fn permissions_denied_for_local_and_unsupported_origins() {
+        let st = state(|c| {
+            c.features.camera = true;
+            c.features.microphone = true;
+            c.features.geolocation = true;
+        });
+        for bad in [
+            "tauri://localhost/offline.html",
+            "http://tauri.localhost/offline.html",
+            "https://evil.com/",
+            "https://example.com.evil.com/",
+            "http://example.com/",
+            "file:///tmp/x.html",
+            "about:blank",
+            "data:text/html,x",
+        ] {
+            assert_eq!(
+                permission_decision(&st, Some(&u(bad)), PermissionKind::Camera),
+                PermissionResponse::Deny,
+                "{bad}"
+            );
+        }
         assert_eq!(
             permission_decision(&st, None, PermissionKind::Camera),
             PermissionResponse::Deny
